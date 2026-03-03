@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行业知识问答系统</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- 头部 -->
+  <header class="bg-white shadow-sm">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+      <h1 class="text-xl font-bold text-gray-800">行业知识问答系统</h1>
+      <div>
+        <input
+          type="file"
+          id="file-upload"
+          accept=".pdf,.txt,.docx,.xlsx,.xls"
+          class="hidden"
+        >
+        <label
+          for="file-upload"
+          class="px-4 py-2 bg-green-600 text-white rounded-lg cursor-pointer hover:bg-green-700 disabled:opacity-50"
+          id="upload-btn"
+        >
+          📚 上传文档
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <!-- 聊天区域 -->
+  <main class="max-w-4xl mx-auto px-4 py-6">
+    <div class="bg-white rounded-xl shadow-sm border h-[500px] flex flex-col">
+      <!-- 消息列表 -->
+      <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+        <div class="text-center text-gray-400 py-12" id="empty-state">
+          <p class="text-4xl mb-4">💬</p>
+          <p>上传文档后，开始提问吧！</p>
+        </div>
+      </div>
+
+      <!-- 来源显示 -->
+      <div id="sources" class="px-4 py-2 bg-yellow-50 border-t text-sm text-yellow-800 hidden">
+        📎 参考来源: <span id="sources-text"></span>
+      </div>
+
+      <!-- 输入框 -->
+      <form id="chat-form" class="p-4 border-t flex gap-2">
+        <input
+          type="text"
+          id="question-input"
+          placeholder="输入问题..."
+          class="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+        <button
+          type="submit"
+          id="send-btn"
+          class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+        >
+          发送
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    // 配置 - 部署后修改这里
+    const API_URL = window.location.origin;
+
+    // 状态
+    let messages = [];
+    let sources = [];
+    let loading = false;
+
+    // DOM 元素
+    const messagesEl = document.getElementById('messages');
+    const emptyStateEl = document.getElementById('empty-state');
+    const sourcesEl = document.getElementById('sources');
+    const sourcesTextEl = document.getElementById('sources-text');
+    const chatFormEl = document.getElementById('chat-form');
+    const questionInputEl = document.getElementById('question-input');
+    const sendBtnEl = document.getElementById('send-btn');
+    const uploadBtnEl = document.getElementById('upload-btn');
+    const fileInputEl = document.getElementById('file-upload');
+
+    // 渲染消息
+    function renderMessages() {
+      if (messages.length === 0) {
+        emptyStateEl.style.display = 'block';
+        return;
+      }
+
+      emptyStateEl.style.display = 'none';
+      messagesEl.innerHTML = messages.map(msg => `
+        <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
+          <div class="max-w-[80%] p-4 rounded-xl ${
+            msg.role === 'user'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-800'
+          }">
+            <p class="whitespace-pre-wrap">${msg.content}</p>
+          </div>
+        </div>
+      `).join('');
+
+      // 添加加载状态
+      if (loading) {
+        messagesEl.innerHTML += `
+          <div class="flex justify-start">
+            <div class="bg-gray-100 p-4 rounded-xl">
+              <span class="animate-pulse">AI 正在思考...</span>
+            </div>
+          </div>
+        `;
+      }
+
+      // 滚动到底部
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // 上传文档
+    fileInputEl.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      uploadBtnEl.textContent = '上传中...';
+      uploadBtnEl.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch(`${API_URL}/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          alert(data.message);
+        } else {
+          alert(data.error || '上传失败');
+        }
+      } catch (err) {
+        alert('上传失败: ' + err.message);
+      } finally {
+        uploadBtnEl.textContent = '📚 上传文档';
+        uploadBtnEl.disabled = false;
+        fileInputEl.value = '';
+      }
+    });
+
+    // 发送消息
+    chatFormEl.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const question = questionInputEl.value.trim();
+      if (!question || loading) return;
+
+      // 添加用户消息
+      messages.push({ role: 'user', content: question });
+      questionInputEl.value = '';
+      loading = true;
+      sources = [];
+      sourcesEl.classList.add('hidden');
+      renderMessages();
+
+      try {
+        const res = await fetch(`${API_URL}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        });
+
+        const data = await res.json();
+
+        if (data.answer) {
+          messages.push({ role: 'assistant', content: data.answer });
+          if (data.sources && data.sources.length > 0) {
+            sources = data.sources;
+            sourcesTextEl.textContent = sources.join(', ');
+            sourcesEl.classList.remove('hidden');
+          }
+        } else {
+          messages.push({ role: 'assistant', content: data.error || '出错了' });
+        }
+      } catch (err) {
+        messages.push({ role: 'assistant', content: '发送失败: ' + err.message });
+      } finally {
+        loading = false;
+        renderMessages();
+      }
+    });
+
+    // 初始渲染
+    renderMessages();
+  </script>
+</body>
+</html>
