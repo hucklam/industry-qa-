@@ -1,14 +1,30 @@
-{
-    "version": 1,
-    "functions": {
-      "api/**/*.py": {
-        "runtime": "python3.11"
+{                                                                                                                                                                                                       
+    "builds": [
+      {                                                                                                                                                                                                   
+        "src": "api/health.py",                             
+        "use": "@vercel/python"
+      },
+      {
+        "src": "api/upload.py",
+        "use": "@vercel/python"
+      },
+      {
+        "src": "api/chat.py",
+        "use": "@vercel/python"
       }
-    },
+    ],
     "routes": [
       {
-        "src": "/api/(.+)",
-        "dest": "/api/$1"
+        "src": "/api/health",
+        "dest": "/api/health.py"
+      },
+      {
+        "src": "/api/upload",
+        "dest": "/api/upload.py"
+      },
+      {
+        "src": "/api/chat",
+        "dest": "/api/chat.py"
       }
     ]
   }
